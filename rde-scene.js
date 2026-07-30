@@ -8,16 +8,20 @@ const S = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3
 const L = (a, b, t) => a + (b - a) * t;
 const hash = i => { const x = Math.sin(i * 127.1 + 31.7) * 43758.5453; return x - Math.floor(x); };
 
+// glow multipliers stay <= 1 so the atlas reads as distinct bands: the plane
+// fills the frame during beats 03-06, and pushing these into HDR (>1) made
+// bloom saturate the whole screen to white. Hot cores (wave fronts, ignition,
+// staircase marker) are still deliberately >1 and carry the glow.
 const BANDS = [
-  { max: 0.06, type: 'none',   n: 0, color: '#31363c', h: 0.07, glow: 0.55 },
-  { max: 0.24, type: 'wave',   n: 1, color: '#2fe08c', h: 0.72, glow: 1.45 },
-  { max: 0.29, type: 'gallop', n: 0, color: '#ffd23d', h: 0.50, glow: 1.1 },
-  { max: 0.47, type: 'wave',   n: 2, color: '#ff9a3d', h: 0.94, glow: 1.45 },
-  { max: 0.52, type: 'gallop', n: 0, color: '#ffd23d', h: 0.55, glow: 1.1 },
-  { max: 0.70, type: 'wave',   n: 3, color: '#ff4433', h: 1.16, glow: 1.45 },
-  { max: 0.75, type: 'gallop', n: 0, color: '#ffd23d', h: 0.60, glow: 1.1 },
-  { max: 0.92, type: 'wave',   n: 4, color: '#d0154e', h: 1.38, glow: 1.45 },
-  { max: 99,   type: 'none',   n: 0, color: '#31363c', h: 0.07, glow: 0.55 },
+  { max: 0.06, type: 'none',   n: 0, color: '#31363c', h: 0.07, glow: 0.5 },
+  { max: 0.24, type: 'wave',   n: 1, color: '#2fe08c', h: 0.72, glow: 0.9 },
+  { max: 0.29, type: 'gallop', n: 0, color: '#ffd23d', h: 0.50, glow: 0.72 },
+  { max: 0.47, type: 'wave',   n: 2, color: '#ff9a3d', h: 0.94, glow: 0.9 },
+  { max: 0.52, type: 'gallop', n: 0, color: '#ffd23d', h: 0.55, glow: 0.72 },
+  { max: 0.70, type: 'wave',   n: 3, color: '#ff4433', h: 1.16, glow: 0.9 },
+  { max: 0.75, type: 'gallop', n: 0, color: '#ffd23d', h: 0.60, glow: 0.72 },
+  { max: 0.92, type: 'wave',   n: 4, color: '#d0154e', h: 1.38, glow: 0.95 },
+  { max: 99,   type: 'none',   n: 0, color: '#31363c', h: 0.07, glow: 0.5 },
 ];
 function regime(gx, gz) {
   const s = gx * 1.15 - 0.32 * gz + 0.02 * (hash(gx * 57.3 + gz * 131.7) - 0.5);
@@ -221,7 +225,11 @@ export function createScene({ container, reduced, options, onFrame }) {
     const c = document.createElement('canvas'); c.width = 512; c.height = 128;
     const g = c.getContext('2d');
     g.font = '600 44px "IBM Plex Mono", ui-monospace, monospace';
-    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = color;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    // dark stroke first: these labels sit over the hot atlas bands
+    g.lineWidth = 7; g.strokeStyle = 'rgba(3,4,6,0.92)'; g.lineJoin = 'round';
+    g.strokeText(text, 256, 68);
+    g.fillStyle = color;
     g.fillText(text, 256, 68);
     const tex = new THREE.CanvasTexture(c); tex.anisotropy = 4;
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
@@ -232,10 +240,14 @@ export function createScene({ container, reduced, options, onFrame }) {
   const pins = new THREE.Group(); pins.visible = false; atlasGroup.add(pins);
   const pinItems = [];
   const pinMat = new THREE.MeshBasicMaterial({ color: cool.clone().multiplyScalar(1.7) });
+  // Heads are deliberately hot (>1) and a touch larger: the plane tilts to face
+  // the camera on beat 06, so the stems foreshorten away and the head is what
+  // has to read as a data point against the bright bands.
+  const pinHeadMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#eaffff').multiplyScalar(2.2) });
   for (const [name, gx, gz] of LABS) {
     const g = new THREE.Group();
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 8), pinMat); stem.position.y = 0.55;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 10), pinMat); head.position.y = 1.1;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), pinHeadMat); head.position.y = 1.1;
     const lab = makeLabel(name, '#d9f4ff', 3.1); lab.position.y = 1.65;
     g.add(stem, head, lab);
     const y = regime(gx, gz).h;
@@ -302,7 +314,20 @@ export function createScene({ container, reduced, options, onFrame }) {
     ringU.uTime.value = t;
     ringU.uUnwrap.value = S(0.215, 0.305, p) * (1 - S(0.915, 0.970, p));
     const win = (a, b) => S(a, a + 0.03, p) * (1 - S(b - 0.03, b, p));
-    ringU.uDim.value = Math.max(0.18, 1 - 0.55 * win(0.46, 0.735) - 0.8 * win(0.745, 0.925));
+    // The unwrapped line fully clears the frame while the atlas is the subject
+    // (beats 06-07); it returns for the finale re-wrap.
+    const dim = Math.max(0, 1 - 0.55 * win(0.46, 0.735) - 1.0 * win(0.745, 0.925));
+    ringU.uDim.value = dim;
+    ringMesh.visible = dim > 0.02;
+
+    // Scroll-aware bloom: the ring beats want heavy glow, but once the
+    // emissive atlas plane fills the frame the same settings blow it out to a
+    // white sheet. Ease strength down and threshold up across those beats.
+    if (bloomPass) {
+      const atlasDom = S(0.315, 0.40, p) * (1 - S(0.925, 0.965, p));
+      bloomPass.strength = opts.bloom * (1 - 0.58 * atlasDom);
+      bloomPass.threshold = 0.22 + 0.34 * atlasDom;
+    }
 
     let i = 0; while (i < KEYS.length - 2 && p > KEYS[i + 1][0]) i++;
     const k0 = KEYS[i], k1 = KEYS[i + 1], kt = clamp01((p - k0[0]) / (k1[0] - k0[0]));
@@ -350,6 +375,10 @@ export function createScene({ container, reduced, options, onFrame }) {
 
       const pinT = S(0.74, 0.815, p);
       pins.visible = pinT > 0.001;
+      // The plane tilts up to face the camera, which would swing the pins to
+      // point away from the viewer and hide them behind it. Counter-rotate so
+      // heads and labels stay on the camera side and descend toward the viewer.
+      pins.rotation.x = Math.PI * tiltT;
       if (pins.visible && Math.abs(pinT - lastPin) > 0.0008) {
         lastPin = pinT;
         pinItems.forEach((it, j) => {

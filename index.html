@@ -20,6 +20,8 @@ body{overscroll-behavior-y:none;}
 a{color:#33e0ff;text-decoration:none;} a:hover{color:#8feeff;}
 ::selection{background:#ff7a29;color:#050507;}
 @keyframes scrollcue{0%{transform:scaleY(0);transform-origin:top}45%{transform:scaleY(1);transform-origin:top}55%{transform:scaleY(1);transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+/* copy sits over the bright atlas bands on beats 03-06 */
+#root h1,#root h2,#root p{text-shadow:0 2px 20px rgba(5,5,7,0.8),0 0 3px rgba(5,5,7,0.5);}
 .cta-solid{transition:background .22s ease,transform .22s ease;}
 .cta-solid:hover{background:#ffa15e !important;color:#050507 !important;transform:translateY(-2px);}
 .cta-ghost{transition:border-color .22s ease,color .22s ease,transform .22s ease;}
